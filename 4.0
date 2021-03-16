@@ -1,0 +1,463 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Mar 14 16:42:16 2021
+
+@author: xiong
+"""
+
+# -*- coding: utf-8 -*-
+import arcpy
+import arcpy.mapping as mp
+import xlrd
+import xlwt
+import sys
+import os
+import shutil
+import traceback
+import csv
+import time
+from shutil import copyfile
+#import pandas as pd
+import re
+import codecs 
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
+
+
+############这两个每张图都要改
+value = 149
+qunluoNum = 18
+############下面这些只第一次改
+sourcePath  = r'E:\zuotu\source' #1
+typePath = r'E:\zuotu\typelyr'#2样式文件夹 
+demgdbPath = r'E:\zuotu\DEM等高线_平滑.gdb' #3
+TBgdbPath = r'E:\zuotu\TB等值线_平滑.gdb'#4
+dataFrameName = '图层' #5大图数据框名字
+workSpace = r'E:\zuotu\%s'%str(value)
+############下面不用改
+
+
+
+def enumeration(dirname):
+    for root,dirs,files in os.walk(dirname):        
+        for file in files:            
+            pathList.append(os.path.join(root,file))
+        for dir in dirs:            
+            enumeration(dir)     
+def getCount(csvRowList):
+    polygonList = []
+    
+    cntr = 0
+    ratioList  = []
+    returnStr = '' #温度带
+    returnRatio = '' #占比
+    countList = []
+    splitNumber = []
+    for rowValue in csvRowList:
+        
+        TBclass = 0
+        print('%s %s'%(rowValue[0],cntr))
+        if rowValue[0] == cntr:
+            pointNum = str(rowValue[1])
+            returnStr = returnStr + str(rowValue[2])
+            splitNumber.append(str(rowValue[3]))
+            returnRatio = returnRatio + str(round(float(int(rowValue[3]))/float(int(rowValue[1])),5)) + ','
+            ratioList.append(round(float(int(rowValue[3]))/float(int(rowValue[1])),5))
+        else:
+            #countList :[点数，温度带，占比，TB分类，每种TB分类的点数列表]
+            countList.append(pointNum)
+            countList.append(returnStr)
+            countList.append(returnRatio[:-1])
+            
+            if max(ratioList) >=0.6321:
+                TBclass = returnStr[ratioList.index(max(ratioList))]
+            countList.append(TBclass)  
+            countList.append(splitNumber)
+            
+            cntr+=1
+            polygonList.append(countList)
+            ratioList  = []
+            splitNumber = []
+            returnStr = '' #温度带
+            returnRatio = '' #占比
+            pointNum = str(rowValue[1])
+            returnStr = returnStr + str(rowValue[2])
+            splitNumber.append(str(rowValue[3]))
+            returnRatio = returnRatio + str(round(float(int(rowValue[3]))/float(int(rowValue[1])),5)) + ','
+            ratioList.append(round(float(int(rowValue[3]))/float(int(rowValue[1])),5))
+            countList = []     
+            
+            
+            
+    countList.append(pointNum)
+    countList.append(returnStr)
+    countList.append(returnRatio[:-1])
+    
+    if max(ratioList) >=0.6321:
+        TBclass = returnStr[ratioList.index(max(ratioList))]
+    countList.append(TBclass)  
+    countList.append(splitNumber)
+    polygonList.append(countList)
+    indexList = [i[0] for i in polygonList]
+
+    return[polygonList,indexList]
+def makexlsx(qunluoPath):
+    for root,dirs,files in os.walk(qunluoPath):
+        for file in files:   
+            if str(qunluoNum) in file:
+                qunluoPath = os.path.join(root,file)
+    switch2 = 0
+      #  fd = pd.read_csv (qunluoPath)
+       
+    #dataF = fd.values.tolist()
+    with open(qunluoPath,'r')as f:
+        for fire in f.readlines():
+
+            if switch2 == 0:
+                row0 = fire.split(',')
+                switch2 = 1
+                pass
+            rowv= fire.split(',')
+
+            if rowv[1] == str(value):
+                row1 = rowv
+                break
+    
+    
+    trueList = [ '\xcb\xb5\xc3\xf7\xca\xe9\xc9\xcf\xb5\xc4\xc8\xba\xcf\xb5\xc3\xfb', 'name', 'value',  '\xcb\xb5\xc3\xf7\xca\xe9\xc8\xba\xcf\xb5\xb1\xe0\xba\xc5', 
+                  '\xd7\xdc\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd',
+                 '\xb8\xdf\xc9\xbd\xbc\xab\xb5\xd8\xb4\xf8\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd',  '\xb8\xdf\xc9\xbd\xbc\xab\xb5\xd8\xb4\xf8',
+                  '\xcc\xa6\xd4\xad\xb4\xf8\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd', '\xcc\xa6\xd4\xad\xb4\xf8',  
+                  '\xba\xae\xce\xc2\xb4\xf8\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd',  '\xba\xae\xce\xc2\xb4\xf8', 
+                 '\xd6\xd0\xce\xc2\xb4\xf8\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd', '\xd6\xd0\xce\xc2\xb4\xf8', 
+                  '\xc5\xaf\xce\xc2\xb4\xf8\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd', '\xc5\xaf\xce\xc2\xb4\xf8', 
+                  '\xd1\xc7\xc8\xc8\xb4\xf8\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd',  '\xd1\xc7\xc8\xc8\xb4\xf8',
+                   '\xc8\xc8\xb4\xf8\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd', '\xc8\xc8\xb4\xf8', 
+                  'TB(min)', 'TB(max)', 
+                 'E(min)', 'E(max)', 
+                 'dem(min)', 'dem(max)', 
+                 '\xb5\xda\xd2\xbb\xc7\xf8\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd','\xd2\xd4\xd4\xc2\xb5\xc4\xb7\xbd\xca\xbd\xbc\xc6\xcb\xe3\xb5\xda\xd2\xbb\xc7\xf8\xd5\xbc\xb1\xc8', 
+                  '\xb5\xda\xb6\xfe\xc7\xf8\xd1\xf9\xb1\xbe\xb5\xe3\xca\xfd', '\xd2\xd4\xd4\xc2\xb5\xc4\xb7\xbd\xca\xbd\xbc\xc6\xcb\xe3\xb5\xda\xb6\xfe\xc7\xf8\xd5\xbc\xb1\xc8']
+    
+    
+    with open(workSpace+ '\\test.csv','a') as f:
+        txt = ','.join(row1[row0.index(trueList[i])] for i in range(0,len(trueList)))
+        f.write(txt +'\ntubanNumber:,' +str(cout6))
+    return txt.split(',')
+def catchDirList(path):
+
+    allfiles = []
+    ext = None
+    needExtFilter = (ext != None)
+    for root,dirs,files in os.walk(path):
+        for filespath in files:
+            filepath = os.path.join(root, filespath)
+            extension = os.path.splitext(filepath)[1][1:]
+            if needExtFilter and extension in ext:
+                allfiles.append(filepath)
+            elif not needExtFilter:
+                allfiles.append(filepath)
+    allfiles.remove(path + '\\test.csv')
+    checkList = [] 
+    for i in allfiles:
+        checkList.append(i.split('.')[-1])
+        
+    checkList[checkList.index('csv')] = ''
+    print(checkList)
+    return([allfiles[checkList.index('csv')],allfiles[checkList.index('mxd')]])
+
+def del_file(filepath):
+
+    del_list = os.listdir(filepath)
+    for f in del_list:
+        file_path = os.path.join(filepath, f)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+        elif os.path.isdir(file_path):
+            shutil.rmtree(file_path)
+####第零部分变量初始化#####
+
+def getName(sheetList):
+    for i2 in sheetList:
+        if str(qunluoNum) in i2 :
+            sheet00 = worboo.sheet_by_name(i2)
+            lie = [str(sheet00.cell_value(0,i)) for i in range(0, sheet00.ncols)]
+            for i3 in range(1,sheet00.nrows):
+                if  len (str(sheet00.cell_value(i3,lie.index('value')))) >0:
+                    
+                    print(int(sheet00.cell_value(i3,lie.index('value'))))
+                    if int(sheet00.cell_value(i3,lie.index('value'))) == value:
+                        Naame = str(value) + '_' + sheet00.cell_value(i3,lie.index('name')).replace('+','jia',5)
+                        return Naame
+                        break
+
+
+qunluoPath = sourcePath  + '\\qunluo' 
+worboo = xlrd.open_workbook(sourcePath + '\\123.xlsx')
+sheetList = worboo.sheet_names()
+Naame = getName(sheetList)
+tubanNaame = Naame + '_图斑'
+tubanPath = workSpace +  "\\NewPolygon" + "\\" +tubanNaame + '.shp' #新图斑文件夹 不用改，但是做完需要拷贝出来                
+gdbPath = workSpace + '\\a.gdb'  
+arcpy.CreateFileGDB_management (workSpace, 'a.gdb', 'CURRENT')
+pathList = []  
+enumeration(sourcePath)
+for i in pathList:
+    switchi = ''.join(t for t in i.split('\\')[-1] if ord(t)>47 and ord(t)<59)
+    if  switchi == str(value) and '\xb3\xbc\xc6' not in i:
+        copyfile(i,i.replace(re.findall(r"source(.*)\\", i)[0],str(value)).replace('source',''))
+
+if os.path.isdir(workSpace + "\\NewPolygon") == False:
+    os.mkdir(workSpace + "\\NewPolygon")
+
+##########################第一部分初始化开始##########################
+mxd = mp.MapDocument('CURRENT')
+layers = mp.ListLayers(mxd)
+arcpy.env.workSpace=workSpace 
+#拆分多部件类要素
+upath = workSpace + "\\NewPolygon"+ '\\' +  tubanNaame + '.shp'
+if os.path.isfile(upath) == False:
+    arcpy.MultipartToSinglepart_management(workSpace + '\\' +  tubanNaame + '.shp',tubanPath)
+    print('拆分多部件成功，进入下一步')
+else:
+    del_file(workSpace +  "\\NewPolygon")
+    arcpy.MultipartToSinglepart_management(workSpace + '\\' +  tubanNaame + '.shp',tubanPath)
+    print('拆分多部件成功，进入下一步')
+#拆分多部件类要素
+
+#获取图斑数量
+cout6 = 0
+with arcpy.da.UpdateCursor(workSpace + "\\NewPolygon"+ '\\' +  tubanNaame + '.shp',('type')) as cursor:
+    for row in cursor:
+        cout6 += 1
+
+#获取图斑数量
+
+#填表
+row2 = makexlsx(qunluoPath)
+#填表
+[csvFile,mxdFile] = catchDirList(workSpace)
+
+arcpy.CopyFeatures_management(workSpace + '\\' + Naame+".shp", workSpace + "\\NewPolygon"+ '\\' + Naame+".shp")
+
+
+
+try:
+    with arcpy.da.UpdateCursor(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",('TB分类','E分类','分堆类型')) as cursor:
+        print(cursor[2]) #不能删 方法基于这行实现
+        print('点shp字段已存在，进入下一步')
+except:
+    arcpy.AddField_management(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",'TB分类',"SHORT") 
+    arcpy.AddField_management(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",'E分类',"TEXT") 
+    arcpy.AddField_management(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",'分堆类',"TEXT") 
+    arcpy.AddField_management(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",'QL',"SHORT") 
+    arcpy.AddField_management(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",'DL',"SHORT") 
+try:
+    with arcpy.da.InsertCursor(tubanPath,('FID',"Shape@",'type','name','value','温度带','占比','TB类型'))as insyoubiao:
+        print(cursor[-1])
+        print('图斑字段已存在，进入下一步')
+except:
+    arcpy.AddField_management(tubanPath,'温度带',"TEXT",field_length=20)
+    arcpy.AddField_management(tubanPath,'占比',"TEXT",field_length=20)
+    arcpy.AddField_management(tubanPath,'TB类型',"SHORT")    
+    arcpy.AddField_management(tubanPath,'DL',"SHORT") 
+    print('添加字段成功，进入下一步')
+print('定位图斑成功...')
+#写入csv
+nameList = []
+dics = []
+lstValues = [] 
+with open(csvFile,'r')as f:
+    for fire in f.readlines():
+        lstValues = fire.split(',')
+        dic = {'tb':lstValues [1],'E':lstValues [2],'fendui':lstValues[3].replace('\n','',1)}
+        nameList.append(lstValues [0])
+        dics.append(dic)
+nameList = [int(float(ii)) for ii in nameList[1:]]
+dics = dics[1:]
+with arcpy.da.UpdateCursor(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",('ID','TB分类','E分类','分堆类')) as cursor:
+    for row in cursor:
+        dic = dics[nameList.index(row[0])]
+        row[1] = int(dic['tb'])
+        row[2] = dic['E']
+        row[3] = dic['fendui']
+        cursor.updateRow(row)    
+    print('TB分类，E分类，分堆类型写入结束')
+#加载图斑shp数据
+arcpy.env.workSpace = gdbPath
+target_features= tubanPath
+out_feature_class = gdbPath + '\\a_图斑占比' 
+join_operation='JOIN_ONE_TO_ONE'
+
+# ['type','name','value','GRID_CODE','ID','F376_林下以岗松为主的马尾松林_芒草、野古草、金茅草丛分类_csv_TB']
+arcpy.SpatialJoin_analysis(tubanPath, Naame, out_feature_class,join_operation)
+arcpy.TabulateIntersection_analysis('a_图斑占比',["TARGET_FID","Join_Count"],Naame,gdbPath+"\\a_占比","TB分类")
+print('取交结束')
+csvRowList = []
+with arcpy.da.UpdateCursor('a_占比',('TARGET_FID',"Join_Count",'TB分类','PNT_COUNT','PERCENTAGE'))as insyoubiao:
+    for row in insyoubiao:
+        csvRowList.append(row)
+        
+##########################第一点五部分格式化占比表##########################
+###################
+###################
+###################
+###################
+#如果出现报错IOError:[Error 9 ]Bad file descriptor  从这里开始重新运行就可以
+#如果出现报错IOError:[Error 9 ]Bad file descriptor  从这里开始重新运行就可以
+#如果出现报错IOError:[Error 9 ]Bad file descriptor  从这里开始重新运行就可以
+#如果出现报错IOError:[Error 9 ]Bad file descriptor  从这里开始重新运行就可以
+###################
+###################
+###################
+###################
+###################
+#把运算出的表格式化
+[dataList,indexList] = getCount(csvRowList) 
+##########################第二部分填属性表开始##########################
+#下边是把得出的[温度带 占比 tb分类写入图斑]
+arcpy.DeleteField_management(tubanPath,'ORIG_FID') 
+with arcpy.da.UpdateCursor(tubanPath,('FID',"Shape@",'type','name','value','温度带','占比','TB类型')) as cursor:
+    countTool = 0
+    for row in cursor:
+        row[5] = dataList[countTool][1]
+        row[6] = dataList[countTool][2]
+        row[7] = int(dataList[countTool][3])
+        countTool += 1
+        cursor.updateRow(row)
+
+
+
+arcpy.DeleteField_management(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",'TB分类')
+arcpy.DeleteField_management(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",'E分类')
+arcpy.DeleteField_management(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",'分堆类')
+
+##############   
+rowList = [[],[],[],[],[],[],[],[]] #8个列表
+gList = []
+#下边是把图斑的数据写入分列表，然后清空图斑 Glist是一个记数表，记录第i个图斑的tb分类是几，方便原样写回
+with arcpy.da.UpdateCursor(tubanPath,('FID',"Shape@",'type','name','value','温度带','占比','TB类型')) as cursor:
+    for row in cursor:
+        g = row[-1]
+        rowList[g].append(row)
+        gList.append(g)
+        cursor.deleteRow()
+    print('载入行成功 ，图斑已清空，进入下一步')
+cntr2 = 0
+#下边这部分是取交运算，分别对8个tb类进行计算
+for rows in rowList:
+    print ('类型%s的图斑有%s个'%(str(cntr2),str(len(rows))))
+    if len(rows) > 0 :
+        cntr4 = 0
+        for t in range(0,len(rows)):
+            with arcpy.da.InsertCursor(tubanPath,('FID',"Shape@",'type','name','value','温度带','占比','TB类型'))as insyoubiao:
+                insyoubiao.insertRow(rows[cntr4])
+                cntr4 += 1
+  
+        arcpy.SelectLayerByAttribute_management(Naame,"NEW_SELECTION",'"tb"> 0')
+        arcpy.SelectLayerByLocation_management(Naame,"COMPLETELY_WITHIN",tubanPath)
+        
+        print('类型%s共有点'%str(cntr2) + str(arcpy.GetCount_management(Naame)))
+        expression = "getClass(%s)"%(cntr2)
+        codeblock = """def getClass(a):
+            return a
+            """
+        arcpy.CalculateField_management (Naame,'QL',expression,"PYTHON_9.3",codeblock)
+        print('进度%s/8'%str(cntr2+1))
+        
+        with arcpy.da.UpdateCursor(tubanPath,('FID',"Shape@",'type','name','value','温度带','占比','TB类型'))as coursor:
+            for row in coursor:
+                coursor.deleteRow()
+            print('删除行结束')
+    else:
+        print('当前类无数据，跳过')
+    cntr2 +=1
+    
+    
+#下边是把列表中的小图斑写回去
+cntr3 = 0
+with arcpy.da.InsertCursor(tubanPath,('FID',"Shape@",'type','name','value','温度带','占比','TB类型'))as insyoubiao:
+    for i in range(len(gList)):  
+           insyoubiao.insertRow(rowList[gList[cntr3]][0])
+           del(rowList[gList[cntr3]][0])
+           
+           cntr3 += 1
+    print('写入结束')
+
+
+
+with open(workSpace + '\\shp.csv','wb') as f :
+    csv_writer = csv.writer(f)
+    csv_writer.writerow(['FID','GRID_CODE','ID','tb','E_sum','p_pe','p1_pe1','p2_pe2','p3_pe3','p4_pe4','p5_pe5',
+                         'p6_pe6','p7_pe7','p8_pe8','p9_pe9','p10_pe10','p11_pe11','p12_pe12','dem','X','Y','E_12m',
+                         'QL','DL'])
+    with arcpy.da.UpdateCursor(workSpace + '\\NewPolygon'+ '\\' + Naame+".shp",('*')) as cursor:
+        for row in cursor:
+            del row[1]
+            csv_writer.writerow(row)
+
+
+try:
+    arcpy.AddJoin_management( Naame, "ID", csvFile, "ID")
+except:
+    pass
+
+file=codecs.open(workSpace + '\\1.txt',"w")  
+file.write('_'.join(i for i in [row2[2],row2[1],row2[0],row2[3]]))
+file.close() 
+
+##########################################################更新样式，选跑不是必跑
+typeList = []
+mxd = mp.MapDocument('CURRENT')
+df = arcpy.mapping.ListDataFrames(mxd, dataFrameName)[0]
+layers = mp.ListLayers(mxd)
+
+tbMin = float(row2[19])
+tbMax = float(row2[20])
+demMin = float(row2[23])
+demMax = float(row2[24])
+
+arcpy.env.workSpace = demgdbPath
+DemList = [0,200,300,400,500,600,800,1000,1200,1500,2000,2500,3000,4500,4000]
+insertDemList = [i for i in DemList if i>demMin and i<demMax]
+spacialDem = insertDemList[int(len(insertDemList)/2)] #挑中间一条设置粗一点
+
+for i in insertDemList:
+    arcpy.MakeFeatureLayer_management (demgdbPath + '//'+"dem"+str(i) , "dem"+str(i))
+print('dem添加结束')
+
+insertDemList.remove(spacialDem)
+
+arcpy.env.workSpace = TBgdbPath
+tbList = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,22, 23, 1.5]
+insertTbList = [i for i in tbList if i>tbMin and i<tbMax]
+thickTB = [0,1.5,3,6,10,14,22,30]
+
+for i in insertTbList:
+    if i == 1.5:
+        arcpy.MakeFeatureLayer_management (TBgdbPath + '//'+"tb1point5" , "tb1point5")
+    else:
+        arcpy.MakeFeatureLayer_management (TBgdbPath + '//'+"tb"+str(i) , "tb"+str(i))
+print('tb添加结束')
+
+tbLayerTypeSource = mp.Layer(typePath + '\\' + 'tb.lyr')   
+slimtbLayerTypeSource = mp.Layer(typePath + '\\' + 'tbslim.lyr')   
+demLayerTypeSource = mp.Layer(typePath + '\\' + 'dem.lyr')   
+spacialdemLayerTypeSource = mp.Layer(typePath + '\\' + 'dem.lyr')   
+mxd = mp.MapDocument('CURRENT')
+df = arcpy.mapping.ListDataFrames(mxd, dataFrameName)[0]
+layers = mp.ListLayers(mxd)  
+for lyr in layers:
+    if 'tb' in lyr.name:
+        if int(''.join(i for i in lyr.name if ord(i)<58 and ord(i)>47)) in thickTB:
+            mp.UpdateLayer(df,lyr,tbLayerTypeSource,True)
+        else:
+            mp.UpdateLayer(df,lyr,slimtbLayerTypeSource,True)
+    elif 'dem' in lyr.name:
+        if ''.join(i for i in lyr.name if ord(i)<58 and ord(i)>47) == str(spacialDem):
+            mp.UpdateLayer(df,lyr,spacialdemLayerTypeSource,True)
+        else:
+            mp.UpdateLayer(df,lyr,demLayerTypeSource,True)
+        
+print('更新tb，dem样式结束')
